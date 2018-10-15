@@ -1,0 +1,11 @@
+# IntellijIdea files
+*.iml
+.idea/
+out
+
+# venv
+.venv/
+
+.I-DOBR/
+.dist/
+*.ini
