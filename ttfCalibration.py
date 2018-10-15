@@ -8,6 +8,7 @@ class TtfCalibrate:
         self.parent = parent
         self.utils = utils
         self.ssh = utils.ssh
+        self.test_status = 'PASS'
         self.band_fft = {1: [2, 3], 2: [0, 1], 3: [6, 7], 4: [4, 5]}
         self.uldl_table = {742.5: 707, 878: 833, 1962.5: 1882.5, 2145: 1745, 2355: 2310,
                            806: 847, 942.5: 897.5, 1842.5: 1747.5, 2140: 1950, 2655: 2535}
@@ -18,6 +19,7 @@ class TtfCalibrate:
                 if uldl == 0:
                     continue
                 self.get_peak(band_number=band_number + 1, uldl=uldl)
+        self.parent.result_table.append(['Setting Spectrum Power Factor', self.test_status])
 
     def get_peak(self, band_number, uldl):
         # try:
@@ -25,11 +27,9 @@ class TtfCalibrate:
                 uldl_name = 'Uplink'
             else:
                 uldl_name = 'Downlink'
-            band_name = self.utils.send_command('dobr_filters', 'get {}'.format(band_number)).split('\n')
-            freq_dl_band = [float(x) for x in band_name[1].split(':')[4:6]]
-            freq_dl_center = freq_dl_band[0] + (freq_dl_band[1]-freq_dl_band[0])/2
-            gen = self.parent.instrument.genPreset(freq_dl_center)
-            sa = self.parent.instrument.saPreset(freq_dl_center)
+            band_info = self.parent.utils.get_band_info(band_number=band_number)
+            gen = self.parent.instrument.genPreset(band_info['center'])
+            sa = self.parent.instrument.saPreset(band_info['center'])
             gen.write("POW:AMPL -60 dBm")
             gen.write(":OUTP:STAT ON")
             self.utils.send_command('axsh', 'SET fft {} -195'.format(self.band_fft[band_number][uldl])).strip()
@@ -42,7 +42,10 @@ class TtfCalibrate:
             res = ast.literal_eval(tmp_gain)
             fft = self.utils.send_command('axsh', 'GET fft {}'.format(self.band_fft[band_number][uldl])).strip()
             gain = int(fft) + int(max(res['data']))
-            print('Band: {} {}; FFT: {}; Gain: {}'.format(band_name[0], uldl_name, fft, gain))
+            print('Band: {} {}; FFT: {}; Gain: {}'.format(band_info['name'], uldl_name, fft, gain))
+            fft_delta = abs(202 - abs(curr_fft))
+            if fft_delta > 10:
+                self.test_status = 'FAIL'
 
             gen.write(":OUTP:STAT OFF")
 

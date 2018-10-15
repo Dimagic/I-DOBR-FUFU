@@ -78,10 +78,10 @@ class Storm:
         try:
             app = Application().connect(title=u'Save As')
             wnd_save = app.Dialog
-
             wnd_save[u'File &name:Edit'].set_text(path + band)
             wnd_save.wait('ready')
             wnd_save[u'&Save'].click()
+
         except Exception as e:
             print(str(e))
 

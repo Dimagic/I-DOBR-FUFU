@@ -3,6 +3,8 @@ import re
 
 import time
 
+from prettytable import PrettyTable
+
 from config import Config
 from sshConnect import SshConnect
 
@@ -59,10 +61,16 @@ class Utils:
     def get_bands(self):
         bands = []
         q = self.send_command('udp_bridge1', 'list').split('\n')
+
         for i in q:
             r = re.search('(ABCD\d\d)', i)
             if r is not None:
                 bands.append(r.group(0))
+        if len(bands) != 4:
+            print('Found only {} bands'.format(len(bands)))
+            print(self.send_command('udp_bridge1', 'list'))
+            raw_input('Press Enter for return...')
+            self.parent.menu()
         return bands
 
     def get_serial(self):
@@ -97,14 +105,13 @@ class Utils:
                               format(band_index, tech, DL_start_freq, DL_stop_freq)))
             self.set_imop_status(n + 1, 0)
             print('Set filter {}: {}'.format(curr_filter[0], res['DOBR FILTER'][0]['Status']))
-            print('-'*100)
+            print('-'*50)
 
-    def set_filters_pa_status(self, status):
-        for n, band in enumerate(self.get_bands()):
-            try:
-                self.send_command('dobr_pa_control', 'SET {} {}'.format(n + 1, status))
-            except Exception as e:
-                print(e)
+    def set_filters_pa_status(self, band, status):
+        try:
+            self.send_command('dobr_pa_control', 'SET {} {}'.format(band, status))
+        except Exception as e:
+            print(e)
 
     def get_filters_pa_status(self):
         res = []
@@ -118,3 +125,48 @@ class Utils:
             self.send_command('imop_control', 'SET {} {}'.format(band, status))
         except Exception as e:
             print(e)
+
+    def get_band_info(self, band_number):
+        band_info = {}
+        band_name = self.send_command('dobr_filters', 'get {}'.format(band_number)).split('\n')
+        freq_dl_band = [float(x) for x in band_name[1].split(':')[4:6]]
+        freq_dl_center = freq_dl_band[0] + (freq_dl_band[1] - freq_dl_band[0]) / 2
+        band_info.update({'name': band_name[0], 'start': freq_dl_band[0],
+                          'stop': freq_dl_band[1], 'center': freq_dl_center})
+        return band_info
+
+    def print_table(self, column_name, row_data):
+        table = PrettyTable(["Section"] + column_name)
+        for n, row in enumerate(row_data):
+            n += 1
+            table.add_row([n] + row)
+        print(table)
+
+    def set_remote_communication(self, status):
+        # Remote Communication:    axsh SET CDE 1
+        # Enable Modem Connection: axsh SET GPR ENB 0
+        # Check Modem Connection: asch GET GPR STATUS
+        self.send_command('axsh', 'SET CDE {}'.format(status))
+        self.send_command('axsh', 'SET GPR ENB {}'.format(status))
+        if status == 1:
+            self.send_command('axsh', 'SET GPR APN {}'.format(self.config.getConfAttr('settings', 'apn')))
+        else:
+            self.send_command("axsh", "SET GPR APN ''")
+
+        comm = int(self.send_command('axsh', 'GET CDE'.format(status)).split(' ')[0])
+        modem = int(self.send_command('axsh', 'GET GPR ENB'))
+        test = [int(comm), int(modem)]
+        apn = self.send_command('axsh', 'GET GPR APN').strip()
+
+        if status == 0 and apn == '':
+            test.append(0)
+        if status == 1 and apn == self.config.getConfAttr('settings', 'apn'):
+            test.append(1)
+
+        if status == 0 and sum(test) == 0:
+            return True
+        elif status == 1 and sum(test) == 3:
+            return True
+        else:
+            return False
+

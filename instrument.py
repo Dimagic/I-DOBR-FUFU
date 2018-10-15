@@ -12,14 +12,13 @@ class Instrument:
 
         self.sa = None
         self.gen = None
-        self.sw = None
         try:
             self.rm = visa.ResourceManager()
             self.rm.timeout = 50000
         except Exception as e:
-            print('Error: {}'.format(str(e)))
+            print('Instrument initialisation error: {}'.format(str(e)))
             raw_input('Press enter for return continue...')
-            mainProg.mainMenu()
+            mainProg.menu()
 
     def menu(self):
         os.system("cls")
@@ -120,9 +119,9 @@ class Instrument:
         self.sa.write(":SYST:PRES")
         self.sa.write(":CAL:AUTO OFF")
         self.sa.write(":SENSE:FREQ:center {} MHz".format(freq))
-        self.sa.write(":SENSE:FREQ:span {} MHz".format(3.5))
+        self.sa.write(":SENSE:FREQ:span 100 kHz")
         self.sa.write("DISP:WIND:TRAC:Y:RLEV:OFFS 30")
-        self.sa.write(":BAND:VID 27 KHz")
+        # self.sa.write(":BAND:VID 27 KHz")
         return self.sa
 
     def genPreset(self, freq):
@@ -133,9 +132,6 @@ class Instrument:
         self.gen.write(":OUTP:MOD:STAT OFF")
         self.gen.write(":FREQ:FIX {} MHz".format(freq))
         return self.gen
-
-    def swPreset(self):
-        pass
 
     def setGenPow(self, need):
         span = self.parent.limitsAmpl.get('freqstop') - self.parent.limitsAmpl.get('freqstart')

@@ -18,7 +18,7 @@ class SshConnect:
             client.connect(host,
                            username=self.settings['user'],
                            password=self.settings['password'],
-                           port=int(self.settings['port']), timeout=2)
+                           port=int(self.settings['port']), timeout=5)
             print('Connected to the host: {}'.format(self.settings['host']))
             return client
         except AuthenticationException:
