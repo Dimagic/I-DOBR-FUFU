@@ -1,14 +1,11 @@
 import sys
 import os
-
-import time
-
 from instrument import Instrument
 from storm import Storm
 from tests import Tests
 from utils import Utils
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 
 class Main:
@@ -54,7 +51,7 @@ class Main:
         else:
             self.result_table.append(['Connection to the system', 'PASS'])
 
-        print('Enable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(1)))
+        # print('Enable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(1)))
 
 
         # # save set files
@@ -66,12 +63,13 @@ class Main:
         # self.utils.send_command('udp_bridge1', 'stop')
 
         tests = Tests(self, self.utils)
+        # self.utils.set_filters(1)
 
         # tests.verify_connections()
         # tests.test_composite_power()
 
         # test bands status
-        tests.test_band_status()
+        # tests.test_band_status()
 
         # test sw and patch version
         # tests.test_swv()
@@ -81,15 +79,18 @@ class Main:
         # TTF calibration
         # tests.ttf_calibrate()
 
+        # Band mute test
+        tests.mute_test()
+
         # test alarm
         # tests.test_ext_alarm()
 
-        tests.gpr_gps_test()
-        print('Disable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(0)))
-        tests.clear_log()
+        # tests.gpr_gps_test()
 
+        tests.clear_log()
         self.utils.print_table(['Description', 'Status'], self.result_table)
 
+        self.utils.ssh.close()
         raw_input('Press Enter for continue...')
         self.menu()
 

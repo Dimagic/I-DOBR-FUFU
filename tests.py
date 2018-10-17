@@ -1,4 +1,7 @@
 import time
+from sys import stdout
+
+import datetime
 from prettytable import PrettyTable
 from config import Config
 
@@ -23,13 +26,9 @@ class Tests:
         self.config = Config(parent)
 
     def test_ext_alarm(self):
+        self.utils.send_command('axsh', 'SET EXT 0 0 0 0')
         test_status = 'PASS'
         keys = ['7', '6', '5', '4']
-        alarms = self.utils.get_ext_alarm()
-        if '0' in alarms.values():
-            req = raw_input("Make sure that all Ext allarms in trigger low and press enter or Q for break test...")
-            if req.upper() == 'Q':
-                 self.test_ext_alarm()
         for pin in keys:
             print('Short pin {} to the chassis'.format(pin))
             while True:
@@ -107,9 +106,11 @@ class Tests:
             pass
 
     def test_composite_power(self):
-        self.utils.set_filters()
         test_status = 'PASS'
         try:
+            print('Connect Generator to Base, Spectrum to Mobile using attenuators 30 dB')
+            self.utils.wait_peak(self.utils.get_band_info(1)['center'])
+
             for n in range(1, len(self.utils.get_bands()) + 1):
                 band_info = self.utils.get_band_info(n)
                 gen = self.parent.instrument.genPreset(band_info['center'])
@@ -130,6 +131,7 @@ class Tests:
             self.parent.result_table.append(['Reading DL COMPOSITE Power', test_status])
         except Exception as e:
             print('test_composite_power: {}'.format(e))
+            self.test_composite_power()
 
     def verify_connections(self):
         status = 'PASS'
@@ -156,12 +158,35 @@ class Tests:
             print('gpr_gps_test: initialisation error')
             return
         else:
+            start_time = time.time()
             print('gpr_gps_test: initialisation ok')
 
         while True:
-            if int(self.utils.send_command('axsh', 'GET GPR STATUS')) == 1:
-                print('GPR : PASS')
+            cur_time = time.time()
+            delta_time = int(cur_time - start_time)
+            if delta_time % 10 == 0:
+                if int(self.utils.send_command('axsh', 'GET GPR STATUS')) == 1:
+                    modem_status = 'PASS'
+                    break
+            if delta_time // 60 >= 2:
+                modem_status = 'FAIL'
                 break
-            print('Waiting GPR connection')
-            time.sleep(10)
+            delta = str(datetime.timedelta(seconds=int(cur_time - start_time)))
+            stdout.write('\rWaiting GPR connection: {}'.format(delta))
+            stdout.flush()
+            time.sleep(1)
+        print('\nModem test: {}'.format(modem_status))
+        self.parent.result_table.append(['Modem test', modem_status])
+        print('Disable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(0)))
+
+    def mute_test(self):
+        for band in range(1, len(self.utils.get_bands()) + 1):
+            self.utils.set_filters_pa_status(band, 0)
+        self.utils.set_filters(0)
+        raw_input('Meke sure that all bands led is RED and press ENTER...')
+        time.sleep(5)
+        for band in range(1, len(self.utils.get_bands()) + 1):
+            self.utils.set_filters_pa_status(band, 1)
+        self.parent.result_table.append(['RF information verification', 'PASS'])
+
 

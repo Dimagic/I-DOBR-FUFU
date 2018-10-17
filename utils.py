@@ -61,7 +61,6 @@ class Utils:
     def get_bands(self):
         bands = []
         q = self.send_command('udp_bridge1', 'list').split('\n')
-
         for i in q:
             r = re.search('(ABCD\d\d)', i)
             if r is not None:
@@ -87,7 +86,7 @@ class Utils:
     #         # self.send_command('ifconfig', 'eth0 {} netmask 255.255.255.0 up'.format(host))
     #         self.ssh = self.connect_ssh(host)
 
-    def set_filters(self):
+    def set_filters(self, enable_filter):
         # dobr_filters SET |band_index| |filter_num| |Tag| |Enable| |Tech| |DL_start_freq|
         #                  |DL_stop_freq| |DL_max_power| |DL_max_gain| |power_delta| |Gain_delta|
         for n, band in enumerate(self.get_bands()):
@@ -101,8 +100,8 @@ class Utils:
             DL_stop_freq = center + (bw / 2)
             print('Setting filter for {}'.format(curr_filter[0]))
             print('dobr_filters SET {} 1 1 1 {} {} {} 24 73 3 0'.format(band_index, tech, DL_start_freq, DL_stop_freq))
-            res = ast.literal_eval(self.send_command('dobr_filters', 'SET {} 1 1 1 {} {} {} 24 73 3 0'.
-                              format(band_index, tech, DL_start_freq, DL_stop_freq)))
+            res = ast.literal_eval(self.send_command('dobr_filters', 'SET {} 1 1 {} {} {} {} 24 73 3 0'.
+                              format(band_index, enable_filter, tech, DL_start_freq, DL_stop_freq)))
             self.set_imop_status(n + 1, 0)
             print('Set filter {}: {}'.format(curr_filter[0], res['DOBR FILTER'][0]['Status']))
             print('-'*50)
@@ -169,4 +168,20 @@ class Utils:
             return True
         else:
             return False
+
+    def wait_peak(self, freq):
+        try:
+            gen = self.parent.instrument.genPreset(freq)
+            sa = self.parent.instrument.saPreset(freq)
+            gen.write("POW:AMPL -60 dBm")
+            gen.write(":OUTP:STAT ON")
+            sa.write(":CALC:MARK1:STAT ON")
+            sa.write("CALC:MARK:CPE 1")
+            while float(sa.query("CALC:MARK:Y?")) < 0:
+                time.sleep(1)
+            time.sleep(5)
+            return True
+        except Exception as e:
+            print('Wait_peak Error: {}'.format(e))
+            self.wait_peak(freq)
 
