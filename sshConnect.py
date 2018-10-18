@@ -6,11 +6,12 @@ from config import Config
 class SshConnect:
     def __init__(self, parent):
         self.parent = parent
-        self.settings = Config(parent).getSection('ssh_settings')
+        self.config = Config(parent)
+        self.settings = self.config.getSection('ssh_settings')
 
-    def connect(self, use_eth):
+    def connect(self, host):
+        status = 'FAIL'
         try:
-            host = self.settings['host'] if use_eth else self.settings['usbhost']
             print('Trying connect to {}'.format(host))
             client = paramiko.SSHClient()
             client.load_system_host_keys()
@@ -19,7 +20,9 @@ class SshConnect:
                            username=self.settings['user'],
                            password=self.settings['password'],
                            port=int(self.settings['port']), timeout=5)
-            print('Connected to the host: {}'.format(self.settings['host']))
+            if host == self.config.getConfAttr('ssh_settings', 'host'):
+                status = 'PASS'
+            print('Connected to the host: {}'.format(host))
             return client
         except AuthenticationException:
             print("Authentication failed, please verify your credentials: %s")
@@ -29,43 +32,14 @@ class SshConnect:
             print("Unable to verify server's host key: %s" % badHostKeyException)
         except Exception as e:
             print("Operation error: %s" % e)
+        finally:
+            self.parent.result_table.append(['Setting Default IP {}'.format(host), status])
 
-    def setIp(self):
+    def set_ip(self):
         client = self.connect(False)
         if client is None:
             return
         client.exec_command('/sbin/ifconfig eth0 {} netmask 255.255.255.0 up'.
                                          format(self.settings['host']), timeout=5)
+        # client.exec_command('axsh SET NIC eth0 STATIC 192.168.1.253 255.255.255.0 192.168.1.254')
         self.connect(True)
-
-    # def sendCommand(self, command):
-    #     try:
-    #         stdin, stdout, stderr = self.client.exec_command(command, timeout=5)
-    #         return stdout.read() + stderr.read()
-    #     except Exception as e:
-    #         print("Run command error: {}".format(str(e)))
-    #         return None
-
-    # def getIdProcByName(self, name):
-    #     data = self.sendCommand('ps')
-    #     answer = data.decode("utf-8").split('\n')
-    #     for i in answer:
-    #         if name not in i:
-    #             continue
-    #         else:
-    #             return self.pIdProc.search(i).group(0)
-    #     return None
-    #
-    # def getDeviceName(self):
-    #     listDir = list(self.sendCommand('ls /mnt/axell/etc/target').decode('utf-8').split('\n'))
-    #     for i in listDir:
-    #         if i not in ('current', ''):
-    #             return i
-    #     return None
-    #
-    # def getDeviceMac(self):
-    #     ifaces = self.sendCommand("/sbin/ifconfig -a |awk '/^[a-z]/ { iface=$1; mac=$NF; next }/inet addr:/ { print iface, mac }'").decode('utf-8').split('\n')
-    #     for i in ifaces:
-    #         if 'eth0' in i.lower():
-    #             return self.pMacAddress.search(i).group(0)
-    #     return None

@@ -14,10 +14,14 @@ class Utils:
         self.parent = parent
         self.config = Config(mainProg=parent)
         sshConnect = SshConnect(parent)
-        self.ssh = sshConnect.connect(True)
+        self.ssh = None
+        self.set_ip(sshConnect)
         if self.ssh is None:
-            sshConnect.setIp()
-            self.ssh = sshConnect.connect(True)
+            parent.menu()
+        # self.ssh = sshConnect.connect(True)
+        # if self.ssh is None:
+        #     sshConnect.set_ip()
+        #     self.ssh = sshConnect.connect(True)
 
     def send_command(self, command, arg):
         # print('>> {} {}'.format(command, arg))
@@ -34,6 +38,29 @@ class Utils:
         input("Press enter to continue")
         return self.parent.menu()
 
+    def set_ip(self, sshConnect):
+        settings = self.config.getSection('ssh_settings')
+        self.ssh = sshConnect.connect(settings['host'])
+        if self.ssh is not None:
+            return
+        self.ssh = sshConnect.connect(settings['usbhost'])
+        if self.ssh is None:
+            return
+        self.send_command('axsh', 'SET NIC eth0 STATIC {} {} {}'.format(settings['host'],
+                                                                        settings['mask'],
+                                                                        settings['gtw']))
+        self.send_command('ifconfig', 'eth0 {} netmask {} up'.format(settings['host'],
+                                                                     settings['mask']))
+        for_check = self.send_command('axsh', 'get nic eth0').strip().split(' ')
+        for i in for_check[1:]:
+            if i not in settings.values():
+                print('Trying set static ip is FAIL')
+                self.ssh.close()
+                self.ssh = None
+                return
+        self.ssh.close()
+        self.ssh = sshConnect.connect(settings['host'])
+
     def get_ext_alarm(self):
         alarms = {}
         tmp = self.send_command('get_ext_alarm.sh', '').split('\n')
@@ -43,20 +70,20 @@ class Utils:
             alarms.update({re.search(r'(^\d)', i).group(): re.search(r'(\d$)', i).group()})
         return alarms
 
-    def connect_ssh(self, host, user, password, port):
-        # If host == None, use host from config
-        # if host is None:
-        #     host = self.config.getConfAttr('ssh_settings', 'host')
-        # user = self.config.getConfAttr('ssh_settings', 'user')
-        # password = self.config.getConfAttr('ssh_settings', 'secret')
-        # port = int(self.config.getConfAttr('ssh_settings', 'port'))
-        connection = SshConnect(parent=self.parent).connect(host=host, user=user, password=password, port=port)
-        if connection.client is None:
-            print("Can't establish connection with {}".format(host))
-            input('Press enter for continue...')
-            self.parent.menu()
-        # else:
-        #     return connection.client
+    # def connect_ssh(self, host, user, password, port):
+    #     # If host == None, use host from config
+    #     # if host is None:
+    #     #     host = self.config.getConfAttr('ssh_settings', 'host')
+    #     # user = self.config.getConfAttr('ssh_settings', 'user')
+    #     # password = self.config.getConfAttr('ssh_settings', 'secret')
+    #     # port = int(self.config.getConfAttr('ssh_settings', 'port'))
+    #     connection = SshConnect(parent=self.parent).connect(host=host, user=user, password=password, port=port)
+    #     if connection.client is None:
+    #         print("Can't establish connection with {}".format(host))
+    #         input('Press enter for continue...')
+    #         self.parent.menu()
+    #     # else:
+    #     #     return connection.client
 
     def get_bands(self):
         bands = []

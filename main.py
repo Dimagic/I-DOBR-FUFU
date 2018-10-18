@@ -5,7 +5,8 @@ from storm import Storm
 from tests import Tests
 from utils import Utils
 
-__version__ = '0.1.3'
+
+__version__ = '0.1.5'
 
 
 class Main:
@@ -51,41 +52,40 @@ class Main:
         else:
             self.result_table.append(['Connection to the system', 'PASS'])
 
-        # print('Enable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(1)))
-
-
-        # # save set files
-        # self.utils.send_command('udp_bridge1', 'start')
-        # storm = Storm(self)
-        # for place, band in enumerate(self.utils.get_bands()):
-        #     storm.save_setfile(place=place, band=band)
-        # self.result_table.append(['Save set file for IDOBR', 'PASS'])
-        # self.utils.send_command('udp_bridge1', 'stop')
-
         tests = Tests(self, self.utils)
-        # self.utils.set_filters(1)
+        if not tests.check_bands():
+            self.menu()
 
-        # tests.verify_connections()
-        # tests.test_composite_power()
+        print('Enable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(1)))
+        # save set files
+        self.utils.send_command('udp_bridge1', 'start')
+        storm = Storm(self)
+        for place, band in enumerate(self.utils.get_bands()):
+            storm.save_setfile(place=place, band=band)
+        self.result_table.append(['Save set file for IDOBR', 'PASS'])
+        self.utils.send_command('udp_bridge1', 'stop')
+
+        self.utils.set_filters(1)
+
+        tests.verify_connections()
+        tests.test_composite_power()
 
         # test bands status
-        # tests.test_band_status()
+        tests.test_band_status()
 
         # test sw and patch version
-        # tests.test_swv()
-
-        # self.utils.set_filters_pa_status(1)
+        tests.test_swv()
 
         # TTF calibration
-        # tests.ttf_calibrate()
+        tests.ttf_calibrate()
 
         # Band mute test
         tests.mute_test()
 
         # test alarm
-        # tests.test_ext_alarm()
+        tests.test_ext_alarm()
 
-        # tests.gpr_gps_test()
+        tests.gpr_gps_test()
 
         tests.clear_log()
         self.utils.print_table(['Description', 'Status'], self.result_table)

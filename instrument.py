@@ -117,6 +117,7 @@ class Instrument:
     def saPreset(self, freq):
         self.sa = self.getInstr(self.config.getConfAttr('instruments', 'sa'))
         self.sa.write(":SYST:PRES")
+        time.sleep(2)
         self.sa.write(":CAL:AUTO OFF")
         self.sa.write(":SENSE:FREQ:center {} MHz".format(freq))
         self.sa.write(":SENSE:FREQ:span 100 kHz")

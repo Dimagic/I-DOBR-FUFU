@@ -1,6 +1,6 @@
+import ast
 import time
 from sys import stdout
-
 import datetime
 from prettytable import PrettyTable
 from config import Config
@@ -64,13 +64,29 @@ class Tests:
             res = 'FAIL'
         print('SW ver. verification on board {}: {}'.format(slave_model, res))
 
-
     def check_sw(self, need, current):
         for ver in need:
             if str(ver).upper() not in current.upper():
                 print(need, current)
                 return False
         return True
+
+    def check_bands(self):
+        status = True
+        bands = self.utils.get_bands()
+        doubles = {}
+        for i in bands:
+            if i in doubles:
+                doubles.update({i: False})
+            else:
+                doubles.update({i: True})
+        if not all(doubles.values()):
+            status = False
+            print('Bands has same names: {}'.format(doubles))
+        if not status:
+            raw_input('Press Enter for return to main menu...')
+        return status
+
 
     def test_band_status(self):
         bands = self.utils.get_bands()
@@ -162,21 +178,30 @@ class Tests:
             print('gpr_gps_test: initialisation ok')
 
         while True:
+            gps_status = 'FAIL'
+            modem_status = 'FAIL'
             cur_time = time.time()
             delta_time = int(cur_time - start_time)
             if delta_time % 10 == 0:
                 if int(self.utils.send_command('axsh', 'GET GPR STATUS')) == 1:
                     modem_status = 'PASS'
+                tmp = self.utils.send_command('read_gps_coordinates.sh', '')
+                gps_arr = ast.literal_eval(tmp)['coordinates'][0]
+                if gps_arr['x'] + gps_arr['y'] > 0:
+                    gps_status = 'PASS'
+                if gps_status == 'PASS' and modem_status == 'PASS':
                     break
             if delta_time // 60 >= 2:
                 modem_status = 'FAIL'
                 break
             delta = str(datetime.timedelta(seconds=int(cur_time - start_time)))
-            stdout.write('\rWaiting GPR connection: {}'.format(delta))
+            stdout.write('\rWaiting GPR and GPS connection: {}'.format(delta))
             stdout.flush()
             time.sleep(1)
         print('\nModem test: {}'.format(modem_status))
+        print('\nGPS test: {}'.format(gps_status))
         self.parent.result_table.append(['Modem test', modem_status])
+        self.parent.result_table.append(['GPS test', gps_status])
         print('Disable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(0)))
 
     def mute_test(self):

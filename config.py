@@ -2,6 +2,7 @@ import ast
 
 import configparser
 
+# pyinstaller main.py --onefile -i IDOBR-FUFU.ico -n IDOBR-FUFU
 
 class Config:
     def __init__(self, mainProg):
