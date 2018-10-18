@@ -180,13 +180,25 @@ class Tests:
         print('Disable Remote and Modem Communication: {}'.format(self.utils.set_remote_communication(0)))
 
     def mute_test(self):
-        for band in range(1, len(self.utils.get_bands()) + 1):
+        bands = self.utils.get_bands()
+        for band in range(1, len(bands) + 1):
+            print('Set band {} Transmission: Disable'.format(bands[band - 1]))
             self.utils.set_filters_pa_status(band, 0)
         self.utils.set_filters(0)
-        raw_input('Meke sure that all bands led is RED and press ENTER...')
-        time.sleep(5)
-        for band in range(1, len(self.utils.get_bands()) + 1):
+        while True:
+            answer = raw_input('Make sure that all bands led is RED.\nType Y or N and press ENTER... ').upper()
+            if answer == 'Y':
+                status = 'PASS'
+            elif answer == 'N':
+                status = 'FAIL'
+            else:
+                continue
+            self.parent.result_table.append(['RF information verification', status])
+            break
+
+        for band in range(1, len(bands) + 1):
+            print('Set band {} Transmission: Enable'.format(bands[band - 1]))
             self.utils.set_filters_pa_status(band, 1)
-        self.parent.result_table.append(['RF information verification', 'PASS'])
+
 
 
