@@ -19,7 +19,7 @@ class Config:
         except Exception as e:
             print('ERROR: {}'.format(str(e)))
             raw_input("Press enter to continue...")
-            self.parent.mainMenu()
+            self.parent.menu()
             return False
 
     def setConfAttr(self, section, system, value):
@@ -38,3 +38,4 @@ class Config:
             return tmp
         except configparser.NoSectionError:
             print('Section {} not found'.format(arg))
+

@@ -2,22 +2,47 @@ import os
 import threading
 import time
 
+import datetime
+from sys import stdout
+
 import pywinauto
 from pywinauto import Application, application
-from pywinauto.controls.win32_controls import ComboBoxWrapper, ButtonWrapper, ListBoxWrapper
+from pywinauto.controls.win32_controls import ComboBoxWrapper
 from pywinauto.timings import Timings
 
 from config import Config
 
 
 class CheckStorm(threading.Thread):
-    def __init__(self, band):
-        super(CheckStorm, self).__init__()
-        self.band = band
-        old_band = self.band
-        while old_band == self.band:
-            print(self.band)
-            time.sleep(1)
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs=None, verbose=None):
+        threading.Thread.__init__(self, group=group, target=target, name=name,
+                                  verbose=verbose)
+        self.app = kwargs['app']
+        self.place = kwargs['place']
+        self.band = kwargs['band']
+        self.currTest = kwargs['currTest']
+        return
+
+    def run(self):
+        startTime = time.time()
+        while True:
+            currTime = time.time()
+            delta = str(datetime.timedelta(seconds=int(currTime - startTime)))
+            tmp = application.findwindows.find_windows(title=u'StormInterface.exe')
+            dialog = application.findwindows.find_windows(title=u'Save As')
+            stdout.write('\rSaving set file for band {}: {}'.format(self.band, str(delta)))
+            stdout.flush()
+            time.sleep(.5)
+            if len(tmp) > 0:
+                window = self.app.Dialog
+                button = window.Button
+                button.Click()
+                self.app.kill()
+                self.currTest(self.place, self.band)
+                break
+            if len(dialog) > 0:
+                break
 
 
 class Storm:
@@ -25,14 +50,18 @@ class Storm:
         self.parent = parent
         Timings.window_find_timeout = 60
         self.count_bands = 0
-        self.stormpath = 'c:\Documents and Settings\Axell\Desktop\STORM interface\StormInterface.exe'
+        self.stormpath = Config(mainProg=parent).getConfAttr('settings', 'stormpath')
         self.conn_loc_ip = '192.168.1.2'
         self.conn_rem_ip = '192.168.1.253'
+        self.parent.utils.print_testname('Save set file')
 
     def save_setfile(self, place, band):
         app, wnd_main = self.run_storm()
-        # check = CheckStorm(band)
-        # check.run()
+        if None in (app, wnd_main):
+            raw_input("\nCan't start StormInterface\nPress enter for return... ")
+            self.parent.menu()
+        check = CheckStorm(kwargs={'currTest': self, 'app': app, 'place': place, 'band': band})
+        check.start()
         if place <= 1:
             port = '30000'
         else:
@@ -47,20 +76,24 @@ class Storm:
         wnd_main[u'Connect'].click()
         wnd_main.wait('ready')
         if not self.is_connected(wnd_main=wnd_main):
-            print('Connection fail. Reconnect')
+            print('\nConnection fail. Reconnect')
             self.save_setfile(place, band)
         wnd_main[u'Create SetFile'].click()
         self.save_file(band)
         try:
             wnd_main.wait('ready')
         except pywinauto.findwindows.ElementAmbiguousError:
-            window = app.Dialog
-            msg = window[u'Static2'].window_text()
-            if msg != u'Finished to create setfile':
-                app.kill()
-            window[u'OK'].click()
+            getAnswer = False
+            while not getAnswer:
+                window = app.Dialog
+                msg = window[u'Static2'].window_text()
+                if msg != u'Finished to create setfile':
+                    app.kill()
+                else:
+                    getAnswer = True
+                window[u'OK'].click()
         wnd_main[u'Disconnect'].click()
-        print('Save set file for band {} - OK'.format(band))
+        print('\nSave set file for band {} - OK'.format(band))
         self.count_bands += 1
         if self.count_bands == len(self.parent.utils.get_bands()):
             app.kill()
@@ -73,15 +106,16 @@ class Storm:
             os.mkdir(path)
 
         while len(application.findwindows.find_windows(title=u'Save As')) == 0:
-            time.sleep(.5)
-
+            time.sleep(1)
         try:
             app = Application().connect(title=u'Save As')
             wnd_save = app.Dialog
-            wnd_save[u'File &name:Edit'].set_text(path + band)
+            wnd_save[u'Edit'].set_text(path + band)
             wnd_save.wait('ready')
-            wnd_save[u'&Save'].click()
-
+            while len(application.findwindows.find_windows(title=u'Save As')) != 0:
+                wnd_save.set_focus()
+                wnd_save[u'&SaveButton'].click()
+                time.sleep(1)
         except Exception as e:
             print(str(e))
 
@@ -89,19 +123,8 @@ class Storm:
         if wnd_main[u'Button3'].texts()[0] == 'Disconnect':
             return True
 
-    def set_param(self, name, val):
-        pass
-
-    def get_param(self, name):
-        pass
-
-    def connect(self):
-        pass
-
-    def disconnect(self):
-        pass
-
     def run_storm(self):
+        app, Wnd_Main = None, None
         try:
             app = Application().connect(title_re="StormInterface")
             Wnd_Main = app.window(title_re="StormInterface")
@@ -114,44 +137,6 @@ class Storm:
         finally:
             return app, Wnd_Main
 
-
-
-
-    # def run_storm(self):
-    #     app = Application(backend="uia")
-    #     wnd_handle = application.findwindows.find_windows(title_re="StormInterface")
-    #
-    #     if len(wnd_handle) == 0:
-    #         app.start(self.stormpath)
-    #         wnd_main = app.window(title_re="StormInterface")
-    #         wnd_main.wait('ready')
-    #     else:
-    #         wnd_main = app.connect(handle=wnd_handle[0])
-    #         # wnd_main = Application(backend="uia").Connect(pid=wnd_handle[0])
-    #         # wnd_main.wait('ready')
-    #         for i in wnd_handle:
-    #             wnd_main = app.connect(handle=wnd_handle[0])
-    #             wnd_main.kill()
-    #         self.run_storm()
-    #     return app, wnd_main
-
-    # def save_setfiles(self, bands):
-    #     app, Wnd_Main = self.run_storm_interface()
-    #     self.currentWindow = app.windows(title='StormInterface')[0]
-    #     ComboBoxWrapper(Wnd_Main.ComboBox).select('UDP')
-    #
-    #     Wnd_Main[u'Connect'].click()
-    #     try:
-    #         Wnd_Main.wait('ready')
-    #         self.stormConnection(Wnd_Main)
-    #     except pywinauto.findwindows.ElementAmbiguousError:
-    #         window = app.Dialog
-    #         msg = window[u'Static2'].window_text()
-    #         app.kill()
-    #         try:
-    #             raw_input("{}. Press enter for continue...".format(msg))
-    #         except SyntaxError:
-    #             pass
 
 
 

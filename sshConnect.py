@@ -8,6 +8,7 @@ class SshConnect:
         self.parent = parent
         self.config = Config(parent)
         self.settings = self.config.getSection('ssh_settings')
+        self.passwords = self.settings['password'].split(';')
 
     def connect(self, host):
         status = 'FAIL'
@@ -16,24 +17,26 @@ class SshConnect:
             client = paramiko.SSHClient()
             client.load_system_host_keys()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(host,
-                           username=self.settings['user'],
-                           password=self.settings['password'],
-                           port=int(self.settings['port']), timeout=5)
-            if host == self.config.getConfAttr('ssh_settings', 'host'):
-                status = 'PASS'
-            print('Connected to the host: {}'.format(host))
-            return client
+            for password in self.passwords:
+                client.connect(host,
+                               username=self.settings['user'],
+                               password=password,
+                               port=int(self.settings['port']), timeout=5)
+                if host == self.config.getConfAttr('ssh_settings', 'host'):
+                    status = 'PASS'
+                print('Connected to the host: {}'.format(host))
+                return client
         except AuthenticationException:
-            print("Authentication failed, please verify your credentials: %s")
+            print("Authentication failed, please verify your credentials")
+            self.connect(host=host)
         except SSHException as sshException:
             print("Unable to establish SSH connection: %s" % sshException)
         except BadHostKeyException as badHostKeyException:
             print("Unable to verify server's host key: %s" % badHostKeyException)
         except Exception as e:
             print("Operation error: %s" % e)
-        finally:
-            self.parent.result_table.append(['Setting Default IP {}'.format(host), status])
+        # finally:
+        #     self.parent.result_table.append(['Setting Default IP {}'.format(host), status])
 
     def set_ip(self):
         client = self.connect(False)

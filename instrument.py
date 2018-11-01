@@ -9,7 +9,6 @@ class Instrument:
     def __init__(self, mainProg):
         self.parent = mainProg
         self.config = Config(mainProg)
-
         self.sa = None
         self.gen = None
         try:
@@ -114,24 +113,26 @@ class Instrument:
                 return instr
         return None
 
-    def saPreset(self, freq):
+    def saPreset(self, *args):
         self.sa = self.getInstr(self.config.getConfAttr('instruments', 'sa'))
         self.sa.write(":SYST:PRES")
         time.sleep(2)
         self.sa.write(":CAL:AUTO OFF")
-        self.sa.write(":SENSE:FREQ:center {} MHz".format(freq))
+        if len(args) > 0:
+            self.sa.write(":SENSE:FREQ:center {} MHz".format(args[0]))
         self.sa.write(":SENSE:FREQ:span 100 kHz")
         self.sa.write("DISP:WIND:TRAC:Y:RLEV:OFFS 30")
         # self.sa.write(":BAND:VID 27 KHz")
         return self.sa
 
-    def genPreset(self, freq):
+    def genPreset(self, *args):
         self.gen = self.getInstr(self.config.getConfAttr('instruments', 'gen'))
         self.gen.write("*RST")
         self.gen.write(":POW:OFFS -30 dB")
         self.gen.write(":OUTP:STAT OFF")
         self.gen.write(":OUTP:MOD:STAT OFF")
-        self.gen.write(":FREQ:FIX {} MHz".format(freq))
+        if len(args) > 0:
+            self.gen.write(":FREQ:FIX {} MHz".format(args[0]))
         return self.gen
 
     def setGenPow(self, need):
@@ -199,3 +200,5 @@ class Instrument:
             print(str(e))
             raw_input('Calibration data file open error. Press enter for continue...')
             self.parent.menu()
+
+

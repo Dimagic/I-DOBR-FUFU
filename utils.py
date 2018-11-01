@@ -1,27 +1,33 @@
 import ast
 import re
-
 import time
 
-from prettytable import PrettyTable
+import sys
 
+import datetime
+from prettytable import PrettyTable
 from config import Config
+from net_scanner import NetScanner
 from sshConnect import SshConnect
 
 
 class Utils:
+    pIpAddress = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")
+    pNetwork = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.)")
+    pMacAddress = re.compile(r"(([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2}))")
+    pIdProc = re.compile(r"^[0-9\s]+")
+    pUptimeFull = re.compile(r"^[0-9a-z:\s]+")
+    pUptime = re.compile(r"(\d){1,2}:(\d\d)$")
+
     def __init__(self, parent):
         self.parent = parent
         self.config = Config(mainProg=parent)
-        sshConnect = SshConnect(parent)
         self.ssh = None
-        self.set_ip(sshConnect)
-        if self.ssh is None:
-            parent.menu()
-        # self.ssh = sshConnect.connect(True)
-        # if self.ssh is None:
-        #     sshConnect.set_ip()
-        #     self.ssh = sshConnect.connect(True)
+        if sys._getframe(1).f_code.co_name == 'run_fufu':
+            sshConnect = SshConnect(parent)
+            self.set_ip(sshConnect)
+            if self.ssh is None:
+                parent.menu()
 
     def send_command(self, command, arg):
         # print('>> {} {}'.format(command, arg))
@@ -35,7 +41,7 @@ class Utils:
                 for_return = stdout.read() + stderr.read()
                 return for_return
         print('{} not found'.format(command))
-        input("Press enter to continue")
+        raw_input("Press enter to continue")
         return self.parent.menu()
 
     def set_ip(self, sshConnect):
@@ -70,21 +76,6 @@ class Utils:
             alarms.update({re.search(r'(^\d)', i).group(): re.search(r'(\d$)', i).group()})
         return alarms
 
-    # def connect_ssh(self, host, user, password, port):
-    #     # If host == None, use host from config
-    #     # if host is None:
-    #     #     host = self.config.getConfAttr('ssh_settings', 'host')
-    #     # user = self.config.getConfAttr('ssh_settings', 'user')
-    #     # password = self.config.getConfAttr('ssh_settings', 'secret')
-    #     # port = int(self.config.getConfAttr('ssh_settings', 'port'))
-    #     connection = SshConnect(parent=self.parent).connect(host=host, user=user, password=password, port=port)
-    #     if connection.client is None:
-    #         print("Can't establish connection with {}".format(host))
-    #         input('Press enter for continue...')
-    #         self.parent.menu()
-    #     # else:
-    #     #     return connection.client
-
     def get_bands(self):
         bands = []
         q = self.send_command('udp_bridge1', 'list').split('\n')
@@ -102,16 +93,9 @@ class Utils:
     def get_serial(self):
         return self.send_command('get_serial', '').strip()
 
-    # def set_ip(self):
-    #     host = self.config.getConfAttr('ssh_settings', 'host')
-    #     usbHost = self.config.getConfAttr('ssh_settings', 'usbHost')
-    #     self.ssh = self.connect_ssh(usbHost)
-    #     curr_ip = self.send_command('axsh', 'get nic eth0').split(' ')
-    #     if curr_ip[1] != host:
-    #         print('Setting eth0 ip = {}'.format(host))
-    #         self.ssh.exec_command('/sbin/ifconfig eth0 {} netmask 255.255.255.0 up'.format(host), timeout=5)
-    #         # self.send_command('ifconfig', 'eth0 {} netmask 255.255.255.0 up'.format(host))
-    #         self.ssh = self.connect_ssh(host)
+    def get_ip_by_iface(self, iface):
+        tmp = self.send_command("ifconfig", "{} | grep 'inet addr:' | cut -d: -f2".format(iface)).replace('Bcast', '')
+        return tmp
 
     def set_filters(self, enable_filter):
         # dobr_filters SET |band_index| |filter_num| |Tag| |Enable| |Tech| |DL_start_freq|
@@ -126,7 +110,7 @@ class Utils:
             DL_start_freq = center - (bw / 2)
             DL_stop_freq = center + (bw / 2)
             print('Setting filter for {}'.format(curr_filter[0]))
-            print('dobr_filters SET {} 1 1 1 {} {} {} 24 73 3 0'.format(band_index, tech, DL_start_freq, DL_stop_freq))
+            # print('dobr_filters SET {} 1 1 1 {} {} {} 24 73 3 0'.format(band_index, tech, DL_start_freq, DL_stop_freq))
             res = ast.literal_eval(self.send_command('dobr_filters', 'SET {} 1 1 {} {} {} {} 24 73 3 0'.
                               format(band_index, enable_filter, tech, DL_start_freq, DL_stop_freq)))
             self.set_imop_status(n + 1, 0)
@@ -200,15 +184,55 @@ class Utils:
         try:
             gen = self.parent.instrument.genPreset(freq)
             sa = self.parent.instrument.saPreset(freq)
+            sa.write(":CALC:MARK1:STAT ON")
+            sa.write("CALC:MARK1:MAX")
             gen.write("POW:AMPL -60 dBm")
             gen.write(":OUTP:STAT ON")
-            sa.write(":CALC:MARK1:STAT ON")
-            sa.write("CALC:MARK:CPE 1")
-            while float(sa.query("CALC:MARK:Y?")) < 0:
-                time.sleep(1)
             time.sleep(5)
+            while float(sa.query("CALC:MARK:Y?")) < 0:
+                sa.write("CALC:MARK1:MAX")
+                time.sleep(1)
             return True
         except Exception as e:
             print('Wait_peak Error: {}'.format(e))
             self.wait_peak(freq)
 
+    def getAvalIp(self, **kwargs):
+        if kwargs['ip'] is not None:
+            self.ssh = SshConnect(self).connect(kwargs['ip'])
+            return
+
+        macForSearch = raw_input('Input mac-address and press Enter: ').upper().replace(":", "-")
+        try:
+            # self.waiter(5)
+            macForSearch = self.pMacAddress.search(macForSearch).group(0)
+            print('MAC for connection: {}'.format(macForSearch))
+            self.scanner = NetScanner(macForSearch)
+            self_ip, mtdi_ip = self.scanner.start_scan()
+            if mtdi_ip is None:
+                print('\nSystem with mac-address: {} not found online'.format(macForSearch))
+            else:
+                return (mtdi_ip)
+        except Exception as e:
+            print('\ngetAvalIp error: {}'.format(e))
+        raw_input('Press Enter for return...')
+        return None
+
+    def testsQueue(self):
+        pass
+
+    def set_datetime(self):
+        now = datetime.datetime.now()
+        dt = now.strftime("%d%m%y")
+        tm = now.strftime("%H%M%S")
+        self.send_command('axsh', 'SET DAT {}'.format(dt))
+        self.send_command('axsh', 'SET TIM {}'.format(tm))
+        remoteDT = self.send_command('axsh', 'GET DAT')
+        remoteTM = self.send_command('axsh', 'GET TIM')
+        if abs(int(dt) - int(remoteDT)) == 0 or abs(int(tm) - int(remoteTM)) < 5:
+             return True
+
+    def print_testname(self, name):
+        print('*' * 50)
+        print('Current test: {}'.format(name))
+        print('*' * 50)

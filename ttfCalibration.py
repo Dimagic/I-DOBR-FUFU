@@ -9,6 +9,8 @@ class TtfCalibrate:
         self.utils = utils
         self.ssh = utils.ssh
         self.test_status = 'PASS'
+        self.gen = self.parent.instrument.genPreset()
+        self.sa = self.parent.instrument.saPreset()
         # {band_number: [UL, DL]}
         self.band_fft = {1: [2, 3], 2: [0, 1], 3: [6, 7], 4: [4, 5]}
         # {DL center: UL center}
@@ -31,7 +33,7 @@ class TtfCalibrate:
         self.parent.result_table.append(['Setting Spectrum Power Factor', self.test_status])
 
     def get_peak(self, band_number, uldl):
-        # try:
+        try:
             band_info = self.parent.utils.get_band_info(band_number=band_number)
             if uldl == 0:
                 uldl_name = 'Uplink'
@@ -40,12 +42,10 @@ class TtfCalibrate:
                 uldl_name = 'Downlink'
                 center_freq = band_info['center']
 
-            gen = self.parent.instrument.genPreset(center_freq)
-            sa = self.parent.instrument.saPreset(center_freq)
-
-
-            gen.write("POW:AMPL -60 dBm")
-            gen.write(":OUTP:STAT ON")
+            self.sa.write(":SENSE:FREQ:center {} MHz".format(center_freq))
+            self.gen.write(":FREQ:FIX {} MHz".format(center_freq))
+            self.gen.write("POW:AMPL -60 dBm")
+            self.gen.write(":OUTP:STAT ON")
             self.utils.send_command('axsh', 'SET fft {} -195'.format(self.band_fft[band_number][uldl])).strip()
             time.sleep(1)
             tmp_gain = self.utils.send_command('fft.lua', self.band_fft[band_number][uldl])
@@ -56,24 +56,14 @@ class TtfCalibrate:
             res = ast.literal_eval(tmp_gain)
             fft = self.utils.send_command('axsh', 'GET fft {}'.format(self.band_fft[band_number][uldl])).strip()
             gain = int(fft) + int(max(res['data']))
-            print('\nBand: {} {}; FFT: {}; Gain: {}'.format(band_info['name'], uldl_name, fft, gain))
+            print('{0:10}{1:10} FFT = {2:3} Gain = {3:3}'.format(band_info['name'], uldl_name, fft, gain))
             fft_delta = abs(202 - abs(curr_fft))
             if fft_delta > 10:
                 self.test_status = 'FAIL'
-
-            gen.write(":OUTP:STAT OFF")
-
-            # tmp = self.utils.send_command('fft.lua', band)
-            # res = ast.literal_eval(tmp)
-            # fft = self.utils.send_command('axsh', 'GET fft {}'.format(band))
-            # print('Band: {}'.format(res.get('band')))
-            # print('BW: {}-{}'.format(res.get('start'), res.get('stop')))
-            # data = res.get('data')
-            # print('Factor = {}'.format(fft))
-            # print('Gain = {}'.format(int(fft) + int(max(data))))
-        # except Exception as e:
-        #     print('Get peak error: {}'.format(e))
-        #     return False
+            self.gen.write(":OUTP:STAT OFF")
+        except Exception as e:
+            print('Get peak error, retrying: {}'.format(e))
+            self.get_peak(band_number, uldl)
 
 
 
